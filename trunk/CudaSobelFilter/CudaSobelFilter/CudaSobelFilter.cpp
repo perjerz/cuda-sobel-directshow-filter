@@ -12,6 +12,7 @@
 #include <windows.h>
 #include <initguid.h>
 #include <olectl.h>
+#include <cuda.h>
 
 #if (1100 > _MSC_VER)
 #include <olectlid.h>
@@ -19,6 +20,11 @@
 
 #include "FilterGUID.h"
 #include "CudaSobelFilter.h"
+
+extern "C"
+{
+	#include "CudaSobelKernel.h"
+}
 
 #pragma warning(disable:4238)  // nonstd extension used: class rvalue used as lvalue
 
@@ -256,7 +262,7 @@ HRESULT CudaSobelFilter::Transform(IMediaSample *pMediaSample)
 
 	// Pass on format changes to downstream filters
 	
-	//testing 此处未获得需要的mediatype，主要是cudadecoder没有设置，需要改进
+	//testing 此处未获得需要的mediatype，可能是下游的错？？？
 
 	//if(pAdjustedType != NULL)
 	{
@@ -284,12 +290,12 @@ HRESULT CudaSobelFilter::DetectSobelEdge( IMediaSample *pMediaSample )
 
 	BYTE* pImageBuffer;
 	pMediaSample->GetPointer(&pImageBuffer);
+	
+	if(!CUDABeginDetection(pImageBuffer, dataLength))
+		return E_FAIL;
 
-	for(int i=0; i<dataLength; ++i)
-	{
-		if(i>dataLength / 2 )
-			pImageBuffer[i] = 128;
-	}
+	if(!CUDAEndDetection(pImageBuffer))
+		return E_FAIL;
 
 	return S_OK;
 }
@@ -349,6 +355,13 @@ HRESULT CudaSobelFilter::CheckTransform(const CMediaType *mtIn,const CMediaType 
 
 	VIDEOINFO *pInput  = (VIDEOINFO *) mtIn->Format();
 	VIDEOINFO *pOutput = (VIDEOINFO *) mtOut->Format();
+
+	m_ImageWidth = pInput->bmiHeader.biWidth;
+	m_ImageHeight = pInput->bmiHeader.biHeight;
+	
+	//testing!! release ??? 在最后释放
+	if(!CUDAInit(m_ImageWidth, m_ImageHeight))
+		return E_INVALIDARG;
 
 	if(memcmp(&pInput->bmiHeader,&pOutput->bmiHeader,sizeof(BITMAPINFOHEADER)) == 0)
 	{
@@ -492,5 +505,3 @@ BOOL APIENTRY DllMain(HANDLE hModule,
 {
 	return DllEntryPoint((HINSTANCE)(hModule), dwReason, lpReserved);
 }
-
-
