@@ -8,6 +8,9 @@
 //
 //------------------------------------------------------------------------------
 
+#ifndef _CUDA_SOBEL_FILTER_H_
+#define _CUDA_SOBEL_FILTER_H_
+
 class CudaSobelFilter : public CTransformFilter
 {
 public:
@@ -29,4 +32,9 @@ private:
 	HRESULT Transform(IMediaSample *pMediaSample);
 
 	HRESULT DetectSobelEdge(IMediaSample *pMediaSample);
+
+	unsigned int m_ImageWidth;
+	unsigned int m_ImageHeight;
 };
+
+#endif
