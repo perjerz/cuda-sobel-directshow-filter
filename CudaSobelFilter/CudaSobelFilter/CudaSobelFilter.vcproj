@@ -33,6 +33,7 @@
 			/>
 			<Tool
 				Name="CUDA Build Rule"
+				Emulation="false"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -67,10 +68,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="strmbasd.lib msvcrtd.lib quartz.lib vfw32.lib winmm.lib version.lib comctl32.lib olepro32.lib cudart.lib"
+				IgnoreImportLibrary="false"
+				AdditionalDependencies="strmbasd.lib msvcrtd.lib quartz.lib vfw32.lib winmm.lib version.lib comctl32.lib olepro32.lib cudart.lib cuda.lib"
 				OutputFile="$(OutDir)\$(ProjectName).ax"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(CUDA_LIB_PATH)&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Lib\x86&quot;"
+				IgnoreAllDefaultLibraries="false"
+				IgnoreDefaultLibraryNames="LIBCMT.lib"
 				ModuleDefinitionFile=".\CudaSobelFilter.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -129,6 +133,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
+				AdditionalIncludeDirectories="&quot;D:\CUDA Toolkit\include&quot;;&quot;C:\Documents and Settings\All Users\Application Data\NVIDIA Corporation\NVIDIA GPU Computing SDK\C\common\inc&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Samples\C++\DirectShow\BaseClasses&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Include&quot;"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;CUDASOBELFILTER_EXPORTS"
 				RuntimeLibrary="2"
 				UsePrecompiledHeader="0"
@@ -147,7 +152,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="strmbase.lib msvcrt.lib quartz.lib vfw32.lib winmm.lib version.lib comctl32.lib olepro32.lib cudart.lib cuda.lib"
+				OutputFile="$(OutDir)\$(ProjectName).ax"
 				LinkIncremental="1"
+				AdditionalLibraryDirectories="&quot;$(CUDA_LIB_PATH)&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Lib\x86&quot;"
+				ModuleDefinitionFile=".\CudaSobelFilter.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -177,6 +186,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				CommandLine=""
 			/>
 		</Configuration>
 	</Configurations>
@@ -207,6 +217,14 @@
 						Emulation="true"
 					/>
 				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="CUDA Build Rule"
+						Include="C:\Documents and Settings\All Users\Application Data\NVIDIA Corporation\NVIDIA GPU Computing SDK\C\common\inc"
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
@@ -221,6 +239,13 @@
 			<File
 				RelativePath=".\CudaSobelKernel.h"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\FilterGUID.h"

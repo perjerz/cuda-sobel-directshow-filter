@@ -1,7 +1,23 @@
+//------------------------------------------------------------------------------
+// File: CudaSobelKernel.cu
+// 
+// Author: Ren Yifei
+// 
+// Desc:
+//
+//
+//------------------------------------------------------------------------------
+
 extern "C"
 {
 	#include "CudaSobelKernel.h"
+	#include <stdio.h>
 };
+
+//////////////////////////////////////////////////////////////////////////
+FILE* fout;
+#define MYLOG(x) {fout=fopen("c:\\dbg.txt","a");fprintf(fout,"value: %d\n\n",x);fclose(fout);}
+//////////////////////////////////////////////////////////////////////////
 
 const int TILE_WIDTH	= 16;
 const int TILE_HEIGHT	= 16;
@@ -9,6 +25,10 @@ const int FILTER_RADIUS = 3; //  3 for averge, 1 for sobel
 const int FILTER_AREA	= (2*FILTER_RADIUS+1) * (2*FILTER_RADIUS+1);
 const int BLOCK_WIDTH	= TILE_WIDTH + 2 * FILTER_RADIUS;
 const int BLOCK_HEIGHT	= TILE_HEIGHT + 2 * FILTER_RADIUS;
+
+// CUDA Context
+
+//CUcontext* sobelCtx;
 
 /* DEVICE Memory */
 BYTE* d_LumaPixelsIn = NULL;
@@ -25,6 +45,7 @@ unsigned int	h_Height;
 long			h_DataLength;
 
 __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, unsigned int width, unsigned int height);
+
 void SobelFilterWrapper();
 
 
@@ -35,46 +56,41 @@ bool CUDAInit(unsigned int width, unsigned height)
 	h_Width = width;
 	h_Height = height;
 
-	unsigned int bufferSize = width * height * 2;
-
-	if(d_LumaPixelsIn == NULL)
-	{
-		if(cudaMalloc((void**)&d_LumaPixelsIn, sizeof(BYTE) * bufferSize) != cudaSuccess)
-			return false;
-	}
-
-	if(d_LumaPixelsOut == NULL)
-	{
-		if(cudaMalloc((void**)&d_LumaPixelsOut, sizeof(BYTE) * bufferSize) != cudaSuccess)
-			return false;
-	}
-
-	if(d_Width == NULL && d_Height == NULL)
-	{
-		if(cudaMalloc(&d_Width, sizeof(unsigned int)) != cudaSuccess || cudaMalloc(&d_Height, sizeof(unsigned int)) != cudaSuccess)
-			return false;
-
-		cudaMemcpy(d_Width,  &width, sizeof(unsigned int), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Height, &height, sizeof(unsigned int), cudaMemcpyHostToDevice);
-	}
-
 	return true;
 }
 
 void CUDARelease()
 {
-	cudaFree(d_LumaPixelsIn);
-	cudaFree(d_LumaPixelsOut);
-	cudaFree(d_Width);
-	cudaFree(d_Height);
+	CUDA_SAFE_CALL( cudaFree(d_LumaPixelsIn) );
+	CUDA_SAFE_CALL( cudaFree(d_LumaPixelsOut) );
+	CUDA_SAFE_CALL( cudaFree(d_Width) );
+	CUDA_SAFE_CALL( cudaFree(d_Height) );
 }
 
 bool CUDABeginDetection(BYTE* pImageIn, long dataLength)
 {
 	h_DataLength = dataLength;
 
-	if(cudaMemcpy(d_LumaPixelsIn, pImageIn, sizeof(BYTE) * dataLength, cudaMemcpyHostToDevice) != cudaSuccess)
-		return false;
+	if(d_Width == NULL && d_Height == NULL)
+	{
+		CUDA_SAFE_CALL( cudaMalloc(&d_Width, sizeof(unsigned int)) );
+		CUDA_SAFE_CALL( cudaMalloc(&d_Height, sizeof(unsigned int)) );
+
+		CUDA_SAFE_CALL( cudaMemcpy(d_Width,  &h_Width, sizeof(unsigned int), cudaMemcpyHostToDevice) );
+		CUDA_SAFE_CALL( cudaMemcpy(d_Height, &h_Height, sizeof(unsigned int), cudaMemcpyHostToDevice) );
+	}
+
+	if(d_LumaPixelsIn == NULL)
+	{
+		CUDA_SAFE_CALL( cudaMalloc((void**)&d_LumaPixelsIn, sizeof(BYTE) * h_DataLength) );
+	}
+
+	if(d_LumaPixelsOut == NULL)
+	{
+		CUDA_SAFE_CALL( cudaMalloc((void**)&d_LumaPixelsOut, sizeof(BYTE) * h_DataLength) );
+	}
+
+	CUDA_SAFE_CALL( cudaMemcpy((void*)d_LumaPixelsIn, (void*)pImageIn, sizeof(BYTE) * h_DataLength, cudaMemcpyHostToDevice) );
 
 	SobelFilterWrapper();
 
@@ -83,8 +99,7 @@ bool CUDABeginDetection(BYTE* pImageIn, long dataLength)
 
 bool CUDAEndDetection(BYTE* pImageOut)
 {
-	if(cudaMemcpy(pImageOut, d_LumaPixelsOut, sizeof(BYTE) * h_DataLength, cudaMemcpyDeviceToHost) != cudaSuccess)
-		return false;
+	CUDA_SAFE_CALL( cudaMemcpy(pImageOut, d_LumaPixelsOut, sizeof(BYTE) * h_DataLength / 4, cudaMemcpyDeviceToHost) );
 
 	return true;
 }
@@ -99,13 +114,13 @@ void SobelFilterWrapper()
 
 	SobelFilter<<< dimGrid, dimBlock >>>(d_LumaPixelsIn, d_LumaPixelsOut, *d_Width, *d_Height);
 	
-	cudaThreadSynchronize();
+	CUDA_SAFE_CALL( cudaThreadSynchronize() );
 }
 
 
 __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, unsigned int width, unsigned int height)
 {
-	__shared__ int sharedMem[BLOCK_HEIGHT*BLOCK_WIDTH];
+	__shared__ BYTE sharedMem[BLOCK_HEIGHT*BLOCK_WIDTH];
 
 	int x = blockIdx.x * TILE_WIDTH + threadIdx.x - FILTER_RADIUS;
 	int y = blockIdx.y * TILE_HEIGHT + threadIdx.y - FILTER_RADIUS;
@@ -131,10 +146,11 @@ __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, unsigned int width,
 		for(int dy = -FILTER_RADIUS; dy <= FILTER_RADIUS; ++dy)
 		for(int dx = -FILTER_RADIUS; dx <= FILTER_RADIUS; ++dx)
 		{
-			float pixelValue = sharedMem[sharedIndex + (dy * blockDim.x + dx)];
+			float pixelValue = (float)(sharedMem[sharedIndex + (dy * blockDim.x + dx)]);
+
 			sum += pixelValue;
 		}
 
-		g_DataOut[index] = sum / FILTER_AREA;
+		g_DataOut[index] = (BYTE)(sum / FILTER_AREA);
 	}
 }
