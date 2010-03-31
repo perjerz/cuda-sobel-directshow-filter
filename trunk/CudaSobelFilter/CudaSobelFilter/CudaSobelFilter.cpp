@@ -289,6 +289,7 @@ HRESULT CudaSobelFilter::DetectSobelEdge( IMediaSample *pMediaSample )
 	long dataLength = pMediaSample->GetActualDataLength();
 
 	BYTE* pImageBuffer;
+
 	pMediaSample->GetPointer(&pImageBuffer);
 	
 	if(!CUDABeginDetection(pImageBuffer, dataLength))
