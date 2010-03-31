@@ -18,6 +18,21 @@ extern "C"
 FILE* fout;
 #define MYLOG(x) {fout=fopen("c:\\dbg.txt","a");fprintf(fout,"value: %d\n\n",x);fclose(fout);}
 //////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+//BYTE* h_LogData = -1;
+
+//#define LogCuda(x) {CUDA_SAFE_CALL( cudaMemcpy(h_LogData, x, sizeof(x), cudaMemcpyDeviceToHost) );\
+	//MYLOG(h_LogData)\
+}
+
+typedef int TEST_TYPE;
+
+TEST_TYPE* d_kerneltest;
+
+
+//////////////////////////////////////////////////////////////////////////
+
 
 const int TILE_WIDTH	= 16;
 const int TILE_HEIGHT	= 16;
@@ -35,26 +50,36 @@ BYTE* d_LumaPixelsIn = NULL;
 BYTE* d_LumaPixelsOut = NULL;
 
 // frame size
-unsigned int* d_Width = NULL;
-unsigned int* d_Height = NULL;
+int* d_Width = NULL;
+int* d_Height = NULL;
 
 
 /* HOST Memory */
-unsigned int	h_Width;
-unsigned int	h_Height;
-long			h_DataLength;
+int	h_Width;
+int	h_Height;
+long h_DataLength;
 
-__global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, unsigned int width, unsigned int height);
+__global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height, TEST_TYPE* d_kt);
 
-void SobelFilterWrapper();
+void SobelFilterWrapper(BYTE* pImageIn);
 
 
-bool CUDAInit(unsigned int width, unsigned height)
+bool CUDAInit(int width, int height)
 {
-	//testing !! 检查是否有CUDA设备！
+	//testing !! 检查是否有CUDA设备!
+
+	//if(cuInit(0)!=CUDA_SUCCESS)
+		//return false;
+
+	//cuDeviceGet(&cuDevice, 0);
+	//cuCtxCreate(&cuCtx, 0, cuDevice);
+
 
 	h_Width = width;
 	h_Height = height;
+
+// 	MYLOG(h_Width);
+// 	MYLOG(h_Height);
 
 	return true;
 }
@@ -69,70 +94,76 @@ void CUDARelease()
 
 bool CUDABeginDetection(BYTE* pImageIn, long dataLength)
 {
+	//////////////////////////////////////////////////////////////////////////
+	CUDA_SAFE_CALL( cudaMalloc(&d_kerneltest, sizeof(TEST_TYPE)) );
+	//////////////////////////////////////////////////////////////////////////
+
+
 	h_DataLength = dataLength;
+
 
 	if(d_Width == NULL && d_Height == NULL)
 	{
-		CUDA_SAFE_CALL( cudaMalloc(&d_Width, sizeof(unsigned int)) );
-		CUDA_SAFE_CALL( cudaMalloc(&d_Height, sizeof(unsigned int)) );
+		CUDA_SAFE_CALL( cudaMalloc(&d_Width, sizeof(int)) );
+		CUDA_SAFE_CALL( cudaMalloc(&d_Height, sizeof(int)) );
 
-		CUDA_SAFE_CALL( cudaMemcpy(d_Width,  &h_Width, sizeof(unsigned int), cudaMemcpyHostToDevice) );
-		CUDA_SAFE_CALL( cudaMemcpy(d_Height, &h_Height, sizeof(unsigned int), cudaMemcpyHostToDevice) );
+		CUDA_SAFE_CALL( cudaMemcpy(d_Width,  &h_Width, sizeof(int), cudaMemcpyHostToDevice) );
+		CUDA_SAFE_CALL( cudaMemcpy(d_Height, &h_Height, sizeof(int), cudaMemcpyHostToDevice) );
 	}
 
 	if(d_LumaPixelsIn == NULL)
 	{
-		CUDA_SAFE_CALL( cudaMalloc((void**)&d_LumaPixelsIn, sizeof(BYTE) * h_DataLength) );
+		CUDA_SAFE_CALL( cudaMalloc((void**)&d_LumaPixelsIn, sizeof(BYTE) * h_DataLength / 2) );
 	}
 
 	if(d_LumaPixelsOut == NULL)
 	{
-		CUDA_SAFE_CALL( cudaMalloc((void**)&d_LumaPixelsOut, sizeof(BYTE) * h_DataLength) );
+		CUDA_SAFE_CALL( cudaMalloc((void**)&d_LumaPixelsOut, sizeof(BYTE) * h_DataLength / 2) );
 	}
 
-	CUDA_SAFE_CALL( cudaMemcpy((void*)d_LumaPixelsIn, (void*)pImageIn, sizeof(BYTE) * h_DataLength, cudaMemcpyHostToDevice) );
+	CUDA_SAFE_CALL( cudaMemcpy((void*)d_LumaPixelsIn, (void*)pImageIn, sizeof(BYTE) * h_DataLength / 2, cudaMemcpyHostToDevice) );
 
-	SobelFilterWrapper();
+	SobelFilterWrapper(pImageIn);
 
 	return true;
 }
 
 bool CUDAEndDetection(BYTE* pImageOut)
 {
-	CUDA_SAFE_CALL( cudaMemcpy(pImageOut, d_LumaPixelsOut, sizeof(BYTE) * h_DataLength / 4, cudaMemcpyDeviceToHost) );
+	CUDA_SAFE_CALL( cudaMemcpy(pImageOut, d_LumaPixelsOut, sizeof(BYTE) * h_DataLength / 2, cudaMemcpyDeviceToHost) );
 
 	return true;
 }
 
-void SobelFilterWrapper()
+void SobelFilterWrapper(BYTE* pImageIn)
 {
-	unsigned int gridWidth = (h_Width + TILE_WIDTH - 1) / TILE_WIDTH;
-	unsigned int gridHeight = (h_Height + TILE_HEIGHT - 1) / TILE_HEIGHT;
+	int gridWidth = (h_Width + TILE_WIDTH - 1) / TILE_WIDTH;
+	int gridHeight = (h_Height + TILE_HEIGHT - 1) / TILE_HEIGHT;
 	
 	dim3 dimGrid(gridWidth, gridHeight);
-	dim3 dimBlock(TILE_WIDTH, TILE_HEIGHT);
+	dim3 dimBlock(BLOCK_WIDTH, BLOCK_HEIGHT);
 
-	SobelFilter<<< dimGrid, dimBlock >>>(d_LumaPixelsIn, d_LumaPixelsOut, *d_Width, *d_Height);
-	
+	SobelFilter<<< dimGrid, dimBlock >>>(d_LumaPixelsIn, d_LumaPixelsOut, d_Width, d_Height, d_kerneltest);	
+
 	CUDA_SAFE_CALL( cudaThreadSynchronize() );
 }
 
 
-__global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, unsigned int width, unsigned int height)
+__global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height, TEST_TYPE* d_kt)
 {
 	__shared__ BYTE sharedMem[BLOCK_HEIGHT*BLOCK_WIDTH];
 
-	int x = blockIdx.x * TILE_WIDTH + threadIdx.x - FILTER_RADIUS;
-	int y = blockIdx.y * TILE_HEIGHT + threadIdx.y - FILTER_RADIUS;
+	int x = blockIdx.x * TILE_WIDTH + threadIdx.x ;//- FILTER_RADIUS;
+	int y = blockIdx.y * TILE_HEIGHT + threadIdx.y ;//- FILTER_RADIUS;
 
-	//Clamp to the center
+	//No filtering for the edges
 	x = max(FILTER_RADIUS, x);
-	x = min(x, width - FILTER_RADIUS - 1);
+	x = min(x, *width  - FILTER_RADIUS - 1);
 	y = max(FILTER_RADIUS, y);
-	y = min(y, height - FILTER_RADIUS - 1);
+	y = min(y, *height - FILTER_RADIUS - 1);
 
-	unsigned int index = y * width + x;
-	unsigned int sharedIndex = threadIdx.y * blockDim.y + threadIdx.x;
+	int index = y * (*width) + x;
+	int sharedIndex = threadIdx.y * blockDim.y + threadIdx.x;
 
 	sharedMem[sharedIndex] = g_DataIn[index];
 
@@ -151,6 +182,8 @@ __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, unsigned int width,
 			sum += pixelValue;
 		}
 
-		g_DataOut[index] = (BYTE)(sum / FILTER_AREA);
-	}
+		BYTE res = (BYTE)(sum / FILTER_AREA);
+
+		g_DataOut[index] = res;
+	}	
 }

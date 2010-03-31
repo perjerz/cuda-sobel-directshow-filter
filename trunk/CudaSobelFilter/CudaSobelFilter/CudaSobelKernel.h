@@ -11,12 +11,14 @@
 #ifndef _CUDA_SOBEL_KERNEL_H_
 #define _CUDA_SOBEL_KERNEL_H_
 
+//#include <windef.h>
 #include <cuda.h>
 #include <cutil.h>
 
-typedef unsigned char       BYTE;
 
-bool CUDAInit(unsigned int width, unsigned height);
+typedef unsigned char BYTE;
+
+bool CUDAInit(int width, int height);
 
 void CUDARelease();
 
