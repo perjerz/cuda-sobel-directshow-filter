@@ -11,7 +11,6 @@
 #ifndef _CUDA_SOBEL_KERNEL_H_
 #define _CUDA_SOBEL_KERNEL_H_
 
-//#include <windef.h>
 #include <cuda.h>
 #include <cutil.h>
 
