@@ -31,7 +31,7 @@ private:
 	HRESULT Copy(IMediaSample *pSource, IMediaSample *pDest) const;
 	HRESULT Transform(IMediaSample *pMediaSample);
 
-	HRESULT DetectSobelEdge(IMediaSample *pMediaSample);
+	HRESULT ApplyFilter(IMediaSample *pMediaSample);
 
 	unsigned int m_ImageWidth;
 	unsigned int m_ImageHeight;

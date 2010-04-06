@@ -28,6 +28,27 @@ extern "C"
 
 #pragma warning(disable:4238)  // nonstd extension used: class rvalue used as lvalue
 
+// Filter name
+#if defined COMPILE_SOBEL_FILTER
+	#define FILTER_GUID CLSID_CudaSobelFilter
+	const wchar_t* FILTER_NAME = L"CUDA Sobel Filter";
+
+#elif defined COMPILE_LAPLACIAN_FILTER
+	#define FILTER_GUID CLSID_CudaLaplacianFilter 
+	const wchar_t* FILTER_NAME = L"CUDA Laplacian Filter";
+
+#elif defined COMPILE_AVERAGE_FILTER
+	#define FILTER_GUID CLSID_CudaAverageFilter
+	const wchar_t* FILTER_NAME = L"CUDA Average Filter";
+
+#elif defined COMPILE_HIGH_BOOST_FILTER
+	#define FILTER_GUID CLSID_CudaHighBoostFilter
+	const wchar_t* FILTER_NAME = L"CUDA High Boost Filter";
+
+#endif
+
+
+
 const AMOVIESETUP_MEDIATYPE sudPinTypes =
 {
 	&MEDIATYPE_Video,       // Major type
@@ -63,8 +84,8 @@ const AMOVIESETUP_PIN psudPins[] =
 
 const AMOVIESETUP_FILTER sudContrast =
 {
-	&CLSID_CudaSobelFilter,        // Filter CLSID
-	L"CudaSobelFilter",      // Filter name
+	&FILTER_GUID,        // Filter CLSID
+	FILTER_NAME,      // Filter name
 	MERIT_DO_NOT_USE,       // Its merit
 	2,                      // Number of pins
 	psudPins                // Pin details
@@ -73,8 +94,8 @@ const AMOVIESETUP_FILTER sudContrast =
 CFactoryTemplate g_Templates[1] = 
 {
 	{ 
-		L"CudaSobelFilter"
-		, &CLSID_CudaSobelFilter
+		  FILTER_NAME
+		, &FILTER_GUID
 		, CudaSobelFilter::CreateInstance
 		, NULL
 		, &sudContrast 
@@ -92,7 +113,6 @@ CTransformFilter(tszName, punk, CLSID_CudaSobelFilter)
 {
 	ASSERT(tszName);
 	ASSERT(phr);
-
 }
 
 CUnknown * WINAPI CudaSobelFilter::CreateInstance(LPUNKNOWN punk, HRESULT *phr) 
@@ -268,7 +288,7 @@ HRESULT CudaSobelFilter::Transform(IMediaSample *pMediaSample)
 	{
 		CMediaType AdjustedType((AM_MEDIA_TYPE) m_pInput->CurrentMediaType());
 
-		HRESULT hr = DetectSobelEdge(pMediaSample);
+		HRESULT hr = ApplyFilter(pMediaSample);
 		
 		if(hr == S_OK)
 		{
@@ -284,7 +304,7 @@ HRESULT CudaSobelFilter::Transform(IMediaSample *pMediaSample)
 
 } // Transform
 
-HRESULT CudaSobelFilter::DetectSobelEdge( IMediaSample *pMediaSample )
+HRESULT CudaSobelFilter::ApplyFilter( IMediaSample *pMediaSample )
 {
 	long dataLength = pMediaSample->GetActualDataLength();
 
@@ -399,7 +419,7 @@ HRESULT CudaSobelFilter::DecideBufferSize(IMemAllocator *pAlloc,ALLOCATOR_PROPER
 	ASSERT(pProperties->cbBuffer);
 
 	//testing!
-	pProperties->cbBuffer = 10000000;
+	pProperties->cbBuffer = 5000000;
 
 	// If we don't have fixed sized samples we must guess some size
 

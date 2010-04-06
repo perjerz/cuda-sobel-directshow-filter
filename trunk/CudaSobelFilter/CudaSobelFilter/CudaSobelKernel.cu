@@ -11,35 +11,21 @@
 extern "C"
 {
 	#include "CudaSobelKernel.h"
-	#include <stdio.h>
 };
 
-#define COMPILE_SOBEL_FILTER
-//#define COMPILE_LAPLACIAN_FILTER
-//#define COMPILE_AVERAGE_FILTER
 
-
-//////////////////////////////////////////////////////////////////////////
-//FILE* fout;
-//#define MYLOG(x) {fout=fopen("c:\\dbg.txt","a");fprintf(fout,"value: %d\n\n",x);fclose(fout);}
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
-//BYTE* h_LogData = -1;
-
-//#define LogCuda(x) {CUDA_SAFE_CALL( cudaMemcpy(h_LogData, x, sizeof(x), cudaMemcpyDeviceToHost) );\
-	//MYLOG(h_LogData)\
-}
-//////////////////////////////////////////////////////////////////////////
+#define CLAMP_8bit(x) max(0, min(255, (x)))
 
 const int TILE_WIDTH	= 16;
 const int TILE_HEIGHT	= 16;
 
-#if defined COMPILE_SOBEL_FILTER
+#if	defined	COMPILE_SOBEL_FILTER
 	const int FILTER_RADIUS = 1;
 #elif defined COMPILE_LAPLACIAN_FILTER
 	const int FILTER_RADIUS = 1;
 #elif defined COMPILE_AVERAGE_FILTER
+	const int FILTER_RADIUS = 3;
+#elif defined COMPILE_HIGH_BOOST_FILTER
 	const int FILTER_RADIUS = 3;
 #endif
 
@@ -50,6 +36,7 @@ const int BLOCK_WIDTH	= TILE_WIDTH + 2 * FILTER_RADIUS;
 const int BLOCK_HEIGHT	= TILE_HEIGHT + 2 * FILTER_RADIUS;
 
 const int EDGE_VALUE_THRESHOLD = 70;
+const int HIGH_BOOST_FACTOR = 10;
 
 /* DEVICE Memory */
 BYTE* d_LumaPixelsIn = NULL;
@@ -90,7 +77,9 @@ long h_DataLength;
 __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height, float* d_SobelMatrix);
 __global__ void LaplacianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height, float* d_LaplacianMatrix);
 __global__ void AverageFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height);
-__global__ void MedianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height);
+__global__ void HighBoostFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height);
+
+//__global__ void MedianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height);
 
 void FilterWrapper(BYTE* pImageIn);
 
@@ -98,7 +87,6 @@ void FilterWrapper(BYTE* pImageIn);
 bool CUDAInit(int width, int height)
 {
 	//testing !! 检查是否有CUDA设备!
-
 
 	h_Width = width;
 	h_Height = height;
@@ -181,32 +169,29 @@ bool CUDAEndDetection(BYTE* pImageOut)
 
 void FilterWrapper(BYTE* pImageIn)
 {
-	int gridWidth = (h_Width + TILE_WIDTH - 1) / TILE_WIDTH;
+	int gridWidth  = (h_Width + TILE_WIDTH - 1) / TILE_WIDTH;
 	int gridHeight = (h_Height + TILE_HEIGHT - 1) / TILE_HEIGHT;
 	
 	dim3 dimGrid(gridWidth, gridHeight);
 	dim3 dimBlock(BLOCK_WIDTH, BLOCK_HEIGHT);
 
 #ifdef COMPILE_SOBEL_FILTER
-	
 	SobelFilter<<< dimGrid, dimBlock >>>(d_LumaPixelsIn, d_LumaPixelsOut, d_Width, d_Height, d_SobelMatrix);
 
-#endif
-
-#ifdef COMPILE_LAPLACIAN_FILTER
-
+#elif defined COMPILE_LAPLACIAN_FILTER
 	LaplacianFilter<<< dimGrid, dimBlock >>>(d_LumaPixelsIn, d_LumaPixelsOut, d_Width, d_Height, d_LaplacianMatrix);
 
-#endif
-
-#ifdef COMPILE_AVERAGE_FILTER
-
+#elif defined COMPILE_AVERAGE_FILTER
 	AverageFilter<<< dimGrid, dimBlock >>>(d_LumaPixelsIn, d_LumaPixelsOut, d_Width, d_Height);
+
+#elif defined COMPILE_HIGH_BOOST_FILTER
+	HighBoostFilter<<< dimGrid, dimBlock >>>(d_LumaPixelsIn, d_LumaPixelsOut, d_Width, d_Height);
 
 #endif
 	
 	CUDA_SAFE_CALL( cudaThreadSynchronize() );
 }
+
 
 __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height, float* d_SobelMatrix)
 {
@@ -215,11 +200,19 @@ __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* he
 	int x = blockIdx.x * TILE_WIDTH + threadIdx.x ;//- FILTER_RADIUS;
 	int y = blockIdx.y * TILE_HEIGHT + threadIdx.y ;//- FILTER_RADIUS;
 
+	if( x < FILTER_RADIUS || x > *width  - FILTER_RADIUS - 1 || y < FILTER_RADIUS || y > *height - FILTER_RADIUS - 1)
+	{
+		int index = y * (*width) + x;
+		g_DataOut[index] = g_DataIn[index];
+
+		return;
+	}
+
 	//No filtering for the edges
-	x = max(FILTER_RADIUS, x);
-	x = min(x, *width  - FILTER_RADIUS - 1);
-	y = max(FILTER_RADIUS, y);
-	y = min(y, *height - FILTER_RADIUS - 1);
+// 	x = max(FILTER_RADIUS, x);
+// 	x = min(x, *width  - FILTER_RADIUS - 1);
+// 	y = max(FILTER_RADIUS, y);
+// 	y = min(y, *height - FILTER_RADIUS - 1);
 
 	int index = y * (*width) + x;
 	int sharedIndex = threadIdx.y * blockDim.y + threadIdx.x;
@@ -241,7 +234,7 @@ __global__ void SobelFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* he
 				sumY += centerPixel * d_SobelMatrix[(dx + FILTER_RADIUS) * FILTER_DIAMETER + (dy+FILTER_RADIUS)];
 			}
 
-			g_DataOut[index] = abs(sumX) + abs(sumY) > EDGE_VALUE_THRESHOLD ? 255 : 0;//g_DataIn[index];
+			g_DataOut[index] = abs(sumX) + abs(sumY) > EDGE_VALUE_THRESHOLD ? 255 : 0;
 	}
 }
 
@@ -252,11 +245,19 @@ __global__ void AverageFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* 
 	int x = blockIdx.x * TILE_WIDTH + threadIdx.x ;//- FILTER_RADIUS;
 	int y = blockIdx.y * TILE_HEIGHT + threadIdx.y ;//- FILTER_RADIUS;
 
+	if( x < FILTER_RADIUS || x > *width  - FILTER_RADIUS - 1 || y < FILTER_RADIUS || y > *height - FILTER_RADIUS - 1)
+	{
+		int index = y * (*width) + x;
+		g_DataOut[index] = g_DataIn[index];
+
+		return;
+	}
+
 	//No filtering for the edges
-	x = max(FILTER_RADIUS, x);
-	x = min(x, *width  - FILTER_RADIUS - 1);
-	y = max(FILTER_RADIUS, y);
-	y = min(y, *height - FILTER_RADIUS - 1);
+// 	x = max(FILTER_RADIUS, x);
+// 	x = min(x, *width  - FILTER_RADIUS - 1);
+// 	y = max(FILTER_RADIUS, y);
+// 	y = min(y, *height - FILTER_RADIUS - 1);
 
 	int index = y * (*width) + x;
 	int sharedIndex = threadIdx.y * blockDim.y + threadIdx.x;
@@ -277,7 +278,7 @@ __global__ void AverageFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* 
 			sum += pixelValue;
 		}
 
-		g_DataOut[index] = (BYTE)(sum / FILTER_AREA);
+		g_DataOut[index] = BYTE(sum / FILTER_AREA);
 	}	
 }
 
@@ -289,11 +290,19 @@ __global__ void LaplacianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int
 	int x = blockIdx.x * TILE_WIDTH + threadIdx.x ;//- FILTER_RADIUS;
 	int y = blockIdx.y * TILE_HEIGHT + threadIdx.y ;//- FILTER_RADIUS;
 
+	if( x < FILTER_RADIUS || x > *width  - FILTER_RADIUS - 1 || y < FILTER_RADIUS || y > *height - FILTER_RADIUS - 1)
+	{
+		int index = y * (*width) + x;
+		g_DataOut[index] = g_DataIn[index];
+
+		return;
+	}
+
 	//No filtering for the edges
-	x = max(FILTER_RADIUS, x);
-	x = min(x, *width  - FILTER_RADIUS - 1);
-	y = max(FILTER_RADIUS, y);
-	y = min(y, *height - FILTER_RADIUS - 1);
+// 	x = max(FILTER_RADIUS, x);
+// 	x = min(x, *width  - FILTER_RADIUS - 1);
+// 	y = max(FILTER_RADIUS, y);
+// 	y = min(y, *height - FILTER_RADIUS - 1);
 
 	int index = y * (*width) + x;
 	int sharedIndex = threadIdx.y * blockDim.y + threadIdx.x;
@@ -320,8 +329,50 @@ __global__ void LaplacianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int
 	}	
 }
 
+__global__ void HighBoostFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height)
+{
+	__shared__ BYTE sharedMem[BLOCK_HEIGHT*BLOCK_WIDTH];
 
-__global__ void MedianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height)
+	int x = blockIdx.x * TILE_WIDTH + threadIdx.x ;//- FILTER_RADIUS;
+	int y = blockIdx.y * TILE_HEIGHT + threadIdx.y ;//- FILTER_RADIUS;
+
+	if( x < FILTER_RADIUS || x > *width  - FILTER_RADIUS - 1 || y < FILTER_RADIUS || y > *height - FILTER_RADIUS - 1)
+	{
+		int index = y * (*width) + x;
+		g_DataOut[index] = g_DataIn[index];
+
+		return;
+	}
+
+	//No filtering for the edges
+// 	x = max(FILTER_RADIUS, x);
+// 	x = min(x, *width  - FILTER_RADIUS - 1);
+// 	y = max(FILTER_RADIUS, y);
+// 	y = min(y, *height - FILTER_RADIUS - 1);
+
+	int index = y * (*width) + x;
+	int sharedIndex = threadIdx.y * blockDim.y + threadIdx.x;
+
+	BYTE centerPixel = sharedMem[sharedIndex] = g_DataIn[index];
+
+	__syncthreads();
+
+	if(		threadIdx.x >= FILTER_RADIUS && threadIdx.x < BLOCK_WIDTH - FILTER_RADIUS 
+		&&	threadIdx.y >= FILTER_RADIUS && threadIdx.y < BLOCK_HEIGHT - FILTER_RADIUS)
+	{
+		float sum = 0;
+
+		for(int dy = -FILTER_RADIUS; dy <= FILTER_RADIUS; ++dy)
+			for(int dx = -FILTER_RADIUS; dx <= FILTER_RADIUS; ++dx)
+			{
+				float pixelValue = (float)(sharedMem[sharedIndex + (dy * blockDim.x + dx)]);
+				sum += pixelValue;
+			}
+
+			g_DataOut[index] = CLAMP_8bit(centerPixel + HIGH_BOOST_FACTOR * (BYTE)(centerPixel - sum / FILTER_AREA));
+}
+
+/*__global__ void MedianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* height)
 {
 	__shared__ BYTE sharedMem[BLOCK_HEIGHT*BLOCK_WIDTH];
 
@@ -374,5 +425,5 @@ __global__ void MedianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int* h
 				}
 
 			g_DataOut[index] = res;
-	}	
+	}*/	
 }
