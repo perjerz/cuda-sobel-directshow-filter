@@ -1,10 +1,12 @@
 //------------------------------------------------------------------------------
-// File: CudaSobelFilter.cpp
+// File: CudaFilter.cpp
 // 
-// Author: Ren Yifei
-// 
-// Desc: 
-// 
+// Author: Ren Yifei, Lin Ziya
+//
+// Contact: yfren@cs.hku.hk, zlin@cs.hku.hk
+//
+// Desc: CUDA Filter class derived from CTransformFilter in DirectShow.
+// The specific type is decided by the macro in CudAFilterKernel.h
 //
 //------------------------------------------------------------------------------
 
@@ -19,14 +21,14 @@
 #endif
 
 #include "FilterGUID.h"
-#include "CudaSobelFilter.h"
+#include "CudaFilter.h"
 
 extern "C"
 {
-	#include "CudaSobelKernel.h"
+	#include "CudaFilterKernel.h"
 }
 
-#pragma warning(disable:4238)  // nonstd extension used: class rvalue used as lvalue
+#pragma warning(disable:4238)
 
 // Filter name
 #if defined COMPILE_SOBEL_FILTER
@@ -96,7 +98,7 @@ CFactoryTemplate g_Templates[1] =
 	{ 
 		  FILTER_NAME
 		, &FILTER_GUID
-		, CudaSobelFilter::CreateInstance
+		, CudaTransformFilter::CreateInstance
 		, NULL
 		, &sudContrast 
 	}
@@ -108,18 +110,18 @@ int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 //
 // Constructor
 //
-CudaSobelFilter::CudaSobelFilter(TCHAR *tszName,LPUNKNOWN punk,HRESULT *phr) :
+CudaTransformFilter::CudaTransformFilter(TCHAR *tszName,LPUNKNOWN punk,HRESULT *phr) :
 CTransformFilter(tszName, punk, CLSID_CudaSobelFilter)
 {
 	ASSERT(tszName);
 	ASSERT(phr);
 }
 
-CUnknown * WINAPI CudaSobelFilter::CreateInstance(LPUNKNOWN punk, HRESULT *phr) 
+CUnknown * WINAPI CudaTransformFilter::CreateInstance(LPUNKNOWN punk, HRESULT *phr) 
 {
 	ASSERT(phr);
 
-	CudaSobelFilter *pNewObject = new CudaSobelFilter(NAME("CudaSobelFilter"), punk, phr);
+	CudaTransformFilter *pNewObject = new CudaTransformFilter(NAME("CudaSobelFilter"), punk, phr);
 	if (pNewObject == NULL) 
 	{
 		if (phr)
@@ -137,7 +139,7 @@ CUnknown * WINAPI CudaSobelFilter::CreateInstance(LPUNKNOWN punk, HRESULT *phr)
 // Copy the input sample into the output sample
 // Then transform the output sample 'in place'
 //
-HRESULT CudaSobelFilter::Transform(IMediaSample *pIn, IMediaSample *pOut)
+HRESULT CudaTransformFilter::Transform(IMediaSample *pIn, IMediaSample *pOut)
 {
 	HRESULT hr = Copy(pIn, pOut);
 	
@@ -154,7 +156,7 @@ HRESULT CudaSobelFilter::Transform(IMediaSample *pIn, IMediaSample *pOut)
 //
 // Make destination an identical copy of source
 //
-HRESULT CudaSobelFilter::Copy(IMediaSample *pSource, IMediaSample *pDest) const
+HRESULT CudaTransformFilter::Copy(IMediaSample *pSource, IMediaSample *pDest) const
 {
 	CheckPointer(pSource,E_POINTER);
 	CheckPointer(pDest,E_POINTER);
@@ -258,7 +260,7 @@ HRESULT CudaSobelFilter::Copy(IMediaSample *pSource, IMediaSample *pDest) const
 //
 // 'In place' adjust the contrast of this sample
 //
-HRESULT CudaSobelFilter::Transform(IMediaSample *pMediaSample)
+HRESULT CudaTransformFilter::Transform(IMediaSample *pMediaSample)
 {
 	CheckPointer(pMediaSample,E_POINTER);
 
@@ -281,8 +283,6 @@ HRESULT CudaSobelFilter::Transform(IMediaSample *pMediaSample)
 	}
 
 	// Pass on format changes to downstream filters
-	
-	//testing 此处未获得需要的mediatype，可能是下游的错？？？
 
 	//if(pAdjustedType != NULL)
 	{
@@ -304,7 +304,7 @@ HRESULT CudaSobelFilter::Transform(IMediaSample *pMediaSample)
 
 } // Transform
 
-HRESULT CudaSobelFilter::ApplyFilter( IMediaSample *pMediaSample )
+HRESULT CudaTransformFilter::ApplyFilter( IMediaSample *pMediaSample )
 {
 	long dataLength = pMediaSample->GetActualDataLength();
 
@@ -326,7 +326,7 @@ HRESULT CudaSobelFilter::ApplyFilter( IMediaSample *pMediaSample )
 //
 // Check the input type is OK, return an error otherwise
 //
-HRESULT CudaSobelFilter::CheckInputType(const CMediaType *mtIn)
+HRESULT CudaTransformFilter::CheckInputType(const CMediaType *mtIn)
 {
 	CheckPointer(mtIn,E_POINTER);
 
@@ -352,7 +352,7 @@ HRESULT CudaSobelFilter::CheckInputType(const CMediaType *mtIn)
 //
 // To be able to transform the formats must be identical
 //
-HRESULT CudaSobelFilter::CheckTransform(const CMediaType *mtIn,const CMediaType *mtOut)
+HRESULT CudaTransformFilter::CheckTransform(const CMediaType *mtIn,const CMediaType *mtOut)
 {
 	CheckPointer(mtIn,E_POINTER);
 	CheckPointer(mtOut,E_POINTER);
@@ -380,7 +380,7 @@ HRESULT CudaSobelFilter::CheckTransform(const CMediaType *mtIn,const CMediaType 
 	m_ImageWidth = pInput->bmiHeader.biWidth;
 	m_ImageHeight = pInput->bmiHeader.biHeight;
 	
-	//testing!! release ??? 在最后释放
+	//FIXME release at last
 	if(!CUDAInit(m_ImageWidth, m_ImageHeight))
 		return E_INVALIDARG;
 
@@ -400,7 +400,7 @@ HRESULT CudaSobelFilter::CheckTransform(const CMediaType *mtIn,const CMediaType 
 // Tell the output pin's allocator what size buffers we
 // require. Can only do this when the input is connected
 //
-HRESULT CudaSobelFilter::DecideBufferSize(IMemAllocator *pAlloc,ALLOCATOR_PROPERTIES *pProperties)
+HRESULT CudaTransformFilter::DecideBufferSize(IMemAllocator *pAlloc,ALLOCATOR_PROPERTIES *pProperties)
 {
 	CheckPointer(pAlloc,E_POINTER);
 	CheckPointer(pProperties,E_POINTER);
@@ -418,7 +418,7 @@ HRESULT CudaSobelFilter::DecideBufferSize(IMemAllocator *pAlloc,ALLOCATOR_PROPER
 
 	ASSERT(pProperties->cbBuffer);
 
-	//testing!
+	//FIXME size should be decided.
 	pProperties->cbBuffer = 5000000;
 
 	// If we don't have fixed sized samples we must guess some size
@@ -463,7 +463,7 @@ HRESULT CudaSobelFilter::DecideBufferSize(IMemAllocator *pAlloc,ALLOCATOR_PROPER
 // I support one type, namely the type of the input pin
 // We must be connected to support the single output type
 //
-HRESULT CudaSobelFilter::GetMediaType(int iPosition, CMediaType *pMediaType)
+HRESULT CudaTransformFilter::GetMediaType(int iPosition, CMediaType *pMediaType)
 {
 	// Is the input pin connected
 

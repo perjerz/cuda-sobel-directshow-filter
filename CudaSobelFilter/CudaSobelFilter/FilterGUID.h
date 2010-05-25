@@ -1,10 +1,11 @@
 //------------------------------------------------------------------------------
 // File: FilterGUID.h
 // 
-// Author: Ren Yifei
-// 
-// Desc:
+// Author: Ren Yifei, Lin Ziya
 //
+// Contact: yfren@cs.hku.hk, zlin@cs.hku.hk
+//
+// Desc: GUIDs for filters.
 //
 //------------------------------------------------------------------------------
 

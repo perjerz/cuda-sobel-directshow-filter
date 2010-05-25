@@ -1,16 +1,20 @@
 //------------------------------------------------------------------------------
-// File: CudaSobelKernel.cu
+// File: CudaFilterKernel.cu
 // 
-// Author: Ren Yifei
-// 
-// Desc:
+// Author: Ren Yifei, Lin Ziya
 //
+// Contact: yfren@cs.hku.hk, zlin@cs.hku.hk
+//
+// Desc: The actual CUDA code. 
+// Different filter will be compiled by defining different macro.
+// There're already filters below:
+// 1. Sobel 2. Laplacian 3. Average 4. Highboost
 //
 //------------------------------------------------------------------------------
 
 extern "C"
 {
-	#include "CudaSobelKernel.h"
+	#include "CudaFilterKernel.h"
 };
 
 
@@ -86,7 +90,7 @@ void FilterWrapper(BYTE* pImageIn);
 
 bool CUDAInit(int width, int height)
 {
-	//testing !! 检查是否有CUDA设备!
+	//FIXME Check for device CUDA.
 
 	h_Width = width;
 	h_Height = height;
@@ -323,7 +327,7 @@ __global__ void LaplacianFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int
 				sum += centerPixel * d_LaplacianMatrix[(dy + FILTER_RADIUS) * FILTER_DIAMETER + (dx+FILTER_RADIUS)];
 			}
 
-			//负值？？取0？？？？不要ABS？
+			//FIXME abs?
 			BYTE res = max(0, min((BYTE)sum, 255));
 			g_DataOut[index] = res;
 	}	
@@ -391,8 +395,6 @@ __global__ void HighBoostFilter(BYTE* g_DataIn, BYTE* g_DataOut, int* width, int
 	sharedMem[sharedIndex] = g_DataIn[index];
 
 	__syncthreads();
-
-	//可以用256个桶，然后放，最后取得排第128的
 
 	BYTE sortCuda[256]; for(int i=0;i<256;++i) sortCuda[i]=0;
 	
