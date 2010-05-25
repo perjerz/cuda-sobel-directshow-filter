@@ -1,17 +1,19 @@
 //------------------------------------------------------------------------------
-// File: CudaSobelFilter.h
+// File: CudaFilter.h
 // 
-// Author: Ren Yifei
-// 
-// Desc:
+// Author: Ren Yifei, Lin Ziya
 //
+// Contact: yfren@cs.hku.hk, zlin@cs.hku.hk
+//
+// Desc: CUDA Filter class derived from CTransformFilter in DirectShow. 
+// The specific type is decided by the macro in CudAFilterKernel.h
 //
 //------------------------------------------------------------------------------
 
-#ifndef _CUDA_SOBEL_FILTER_H_
-#define _CUDA_SOBEL_FILTER_H_
+#ifndef _CUDA_FILTER_H_
+#define _CUDA_FILTER_H_
 
-class CudaSobelFilter : public CTransformFilter
+class CudaTransformFilter : public CTransformFilter
 {
 public:
 
@@ -25,8 +27,7 @@ public:
 
 private:
 
-	// Constructor
-	CudaSobelFilter(TCHAR *tszName, LPUNKNOWN punk, HRESULT *phr);
+	CudaTransformFilter(TCHAR *tszName, LPUNKNOWN punk, HRESULT *phr);
 
 	HRESULT Copy(IMediaSample *pSource, IMediaSample *pDest) const;
 	HRESULT Transform(IMediaSample *pMediaSample);

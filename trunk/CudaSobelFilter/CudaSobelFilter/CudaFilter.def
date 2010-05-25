@@ -1,5 +1,4 @@
-
-LIBRARY     CudaSobelFilter.ax
+LIBRARY     CudaFilter.ax
 
 EXPORTS
             DllMain                 PRIVATE
