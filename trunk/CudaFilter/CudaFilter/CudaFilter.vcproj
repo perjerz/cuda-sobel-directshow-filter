@@ -133,7 +133,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;D:\CUDA Toolkit\include&quot;;&quot;C:\Documents and Settings\All Users\Application Data\NVIDIA Corporation\NVIDIA GPU Computing SDK\C\common\inc&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Samples\C++\DirectShow\BaseClasses&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Include&quot;"
+				AdditionalIncludeDirectories="&quot;$(CUDA_INC_PATH)&quot;;&quot;$(NVSDKCOMPUTE_ROOT)\C\common\inc&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Samples\C++\DirectShow\BaseClasses&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Include&quot;"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;CUDASOBELFILTER_EXPORTS"
 				RuntimeLibrary="2"
 				UsePrecompiledHeader="0"
@@ -156,7 +156,7 @@
 				OutputFile="$(OutDir)\$(ProjectName).ax"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(CUDA_LIB_PATH)&quot;;&quot;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Lib\x86&quot;"
-				ModuleDefinitionFile=".\CudaSobelFilter.def"
+				ModuleDefinitionFile=".\CudaFilter.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -215,6 +215,14 @@
 						Name="CUDA Build Rule"
 						Include="$(CUDA_INC_PATH); $(NVSDKCOMPUTE_ROOT)\C\common\inc"
 						OutputFile=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="CUDA Build Rule"
+						Include="$(CUDA_INC_PATH);$(NVSDKCOMPUTE_ROOT)\C\common\inc;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Samples\C++\DirectShow\BaseClasses;D:\MSc Project\DirectShow SDK\Extras\DirectShow\Include"
 					/>
 				</FileConfiguration>
 			</File>
